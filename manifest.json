@@ -2,7 +2,7 @@
   "name": "أذكار",
   "short_name": "أذكار",
   "description": "تطبيق أذكار الصباح والمساء",
-  "start_url": "./Athkar_App.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#07071a",
