@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>أذكار</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="أذكار">
+  <meta name="theme-color" content="#07071a">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Readex+Pro:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="athkar-data.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #07071a;
+      --surface: #0d0d28;
+      --surface2: #12123a;
+      --border: #1e1e50;
+      --text: #e8e4d9;
+      --text-dim: #888aaa;
+      --gold: #d4a853;
+      --gold-dim: #3d2e0d;
+    }
+
+    html, body, #root {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Amiri', Georgia, serif;
+    }
+
+    .title-font {
+      font-family: 'Readex Pro', 'Amiri', sans-serif;
+    }
+
+    canvas#stars {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #root { position: relative; z-index: 1; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Card flip */
+    .card-scene { perspective: 1200px; }
+    .card-inner {
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.55s cubic-bezier(.4,0,.2,1);
+    }
+    .card-inner.flipped { transform: rotateY(180deg); }
+    .card-face {
+      position: absolute; inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .card-back { transform: rotateY(180deg); }
+
+    /* Pixel star shimmer */
+    @keyframes shimmer {
+      0%,100% { opacity: 0.15; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.4); }
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(1.8); opacity: 0; }
+    }
+
+    @keyframes float-up {
+      0% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-60px); }
+    }
+
+    @keyframes slide-in-up {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .anim-slide-up {
+      animation: slide-in-up 0.4s ease both;
+    }
+    .anim-fade {
+      animation: fade-in 0.35s ease both;
+    }
+  </style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── Starfield ────────────────────────────────────────────────────────────────
+function Starfield() {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current || document.getElementById('stars');
+    const ctx = canvas.getContext('2d');
+    let raf;
+    const stars = [];
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    for (let i = 0; i < 280; i++) {
+      stars.push({
+        x: Math.random(),
+        y: Math.random(),
+        size: Math.random() < 0.85 ? 1 : 2,
+        base: 0.08 + Math.random() * 0.35,
+        speed: 0.3 + Math.random() * 1.4,
+        phase: Math.random() * Math.PI * 2,
+        color: Math.random() < 0.15 ? '#c4b8ff' : Math.random() < 0.15 ? '#ffd9aa' : '#ffffff',
+      });
+    }
+
+    let t = 0;
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      t += 0.012;
+      for (const s of stars) {
+        const alpha = s.base + Math.sin(t * s.speed + s.phase) * (s.base * 0.8);
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.fillStyle = s.color;
+        ctx.fillRect(
+          Math.floor(s.x * canvas.width),
+          Math.floor(s.y * canvas.height),
+          s.size, s.size
+        );
+      }
+      ctx.globalAlpha = 1;
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+  }, []);
+  return null;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getActiveDeckId(settings) {
+  const h = new Date().getHours();
+  // After fajr through mid-morning → sabah
+  const fajr = parseInt(settings.fajr ?? 5);
+  const asr  = parseInt(settings.asr  ?? 15);
+  const isha = parseInt(settings.isha ?? 21);
+
+  if (h >= fajr && h < fajr + 5) return 'sabah';
+  if (h >= asr  && h < isha)     return 'masaa';
+  if (h >= isha || h < fajr)     return 'nawm';
+  return null;
+}
+
+function toArabicNum(n) {
+  return String(n);
+}
+
+// ─── Home Screen ─────────────────────────────────────────────────────────────
+function HomeScreen({ onSelect, onSettings }) {
+  const [settings] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('athkar-settings') || '{}'); } catch { return {}; }
+  });
+  const activeId = getActiveDeckId(settings);
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'صباح النور' : hour < 17 ? 'مساء الخير' : 'مساء النور';
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0 20px', maxWidth: 480, margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ padding: '52px 0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className="anim-fade">
+          <div style={{ fontSize: 32, fontWeight: 700, lineHeight: 1.1, letterSpacing: -0.5, fontFamily: "'Readex Pro', sans-serif" }}>
+            أذكاري
+          </div>
+        </div>
+        <button onClick={onSettings} style={{
+          background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)',
+          width: 42, height: 42, borderRadius: 8, cursor: 'pointer', fontSize: 18,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 0.2s'
+        }} onMouseEnter={e=>e.target.style.borderColor='var(--text-dim)'}
+           onMouseLeave={e=>e.target.style.borderColor='var(--border)'}>
+          ⚙
+        </button>
+      </div>
+
+      {/* Decks */}
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 32 }}>
+        {window.DECKS.map((deck, i) => (
+          <DeckCard
+            key={deck.id}
+            deck={deck}
+            active={deck.id === activeId}
+            delay={i * 80}
+            onClick={() => onSelect(deck.id)}
+            onMarkComplete={() => {
+              const progress = deck.cards.reduce((acc, c) => ({ ...acc, [c.id]: true }), {});
+              localStorage.setItem(`athkar-progress-${deck.id}`, JSON.stringify(progress));
+              localStorage.removeItem(`athkar-counts-${deck.id}`);
+              // force re-render
+              window.dispatchEvent(new Event('storage'));
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DeckCard({ deck, active, delay, onClick, onMarkComplete }) {
+  const [hover, setHover] = useState(false);
+  const icons = { sabah: '☀', masaa: '◐', salah: '✦', nawm: '☽' };
+
+  return (
+    <div
+      className=""
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        marginBottom: 16,
+        padding: '22px 24px',
+        background: active
+          ? `linear-gradient(135deg, ${deck.dim}cc, ${deck.dim}55)`
+          : hover ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+        border: `1px solid ${active ? deck.accent + '80' : hover ? 'rgba(255,255,255,0.12)' : 'var(--border)'}`,
+        borderRadius: 12,
+        cursor: 'pointer',
+        transition: 'all 0.25s ease',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Glow for active */}
+      {active && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `radial-gradient(circle at 0% 50%, ${deck.accent}15 0%, transparent 60%)`,
+          pointerEvents: 'none'
+        }} />
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative' }}>
+        {/* Icon */}
+        <div style={{
+          width: 52, height: 52,
+          background: active ? `${deck.accent}22` : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${active ? deck.accent + '60' : 'var(--border)'}`,
+          borderRadius: 10,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 22,
+          color: active ? deck.accent : 'var(--text-dim)',
+          transition: 'all 0.25s',
+          flexShrink: 0,
+        }}>
+          {icons[deck.id]}
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: active ? deck.accent : 'var(--text)', fontFamily: "'Readex Pro', sans-serif" }}>
+            {deck.subtitle}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: "'Readex Pro', sans-serif", fontWeight: 300, marginTop: 8 }}>
+            {deck.subtitle} · {deck.cards.length} أذكار
+          </div>
+        </div>
+
+        {active && (
+          <div style={{
+            fontSize: 10, padding: '3px 10px',
+            background: `${deck.accent}22`,
+            border: `1px solid ${deck.accent}60`,
+            borderRadius: 20, color: deck.accent,
+            fontFamily: 'IBM Plex Mono', letterSpacing: 1,
+            whiteSpace: 'nowrap'
+          }}>
+            Now ✦
+          </div>
+        )}
+      </div>
+
+      {/* Progress dots */}
+      <ProgressDots deck={deck} accent={deck.accent} active={active} />
+
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, direction: 'ltr' }} onClick={e => e.stopPropagation()}>
+        <button onClick={onClick} style={{
+          flex: 1, padding: '8px 0', borderRadius: 8, cursor: 'pointer',
+          background: `${deck.accent}18`, border: `1px solid ${deck.accent}50`,
+          color: deck.accent, fontSize: 12, fontFamily: 'IBM Plex Mono', letterSpacing: 0.5,
+          transition: 'all 0.2s'
+        }}>Open →</button>
+        <button onClick={onMarkComplete} style={{
+          flex: 1, padding: '8px 0', borderRadius: 8, cursor: 'pointer',
+          background: 'none', border: '1px solid var(--border)',
+          color: 'var(--text-dim)', fontSize: 12, fontFamily: 'IBM Plex Mono', letterSpacing: 0.5,
+          transition: 'all 0.2s'
+        }}>✓ Mark Complete</button>
+      </div>
+    </div>
+  );
+}
+
+function ProgressDots({ deck, accent, active }) {
+  const [progress, setProgress] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`athkar-progress-${deck.id}`) || '{}'); } catch { return {}; }
+  });
+
+  useEffect(() => {
+    const handler = () => {
+      try { setProgress(JSON.parse(localStorage.getItem(`athkar-progress-${deck.id}`) || '{}')); } catch {}
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [deck.id]);
+  const completed = deck.cards.filter(c => progress[c.id] === true).length;
+  if (completed === 0) return null;
+
+  return (
+    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{
+        height: 3, flex: 1,
+        background: 'var(--border)', borderRadius: 2, overflow: 'hidden'
+      }}>
+        <div style={{
+          height: '100%', borderRadius: 2,
+          width: `${(completed / deck.cards.length) * 100}%`,
+          background: active ? accent : 'var(--text-dim)',
+          transition: 'width 0.5s ease'
+        }} />
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', direction: 'ltr', flexShrink: 0 }}>
+        {completed}/{deck.cards.length}
+      </div>
+    </div>
+  );
+}
+
+// ─── Deck Screen (Cards) ─────────────────────────────────────────────────────
+function DeckScreen({ deckId, onBack, onComplete }) {
+  const deck = window.DECKS.find(d => d.id === deckId);
+
+  const [counts, setCounts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`athkar-counts-${deckId}`) || '{}'); } catch { return {}; }
+  });
+  const [flipped, setFlipped] = useState({});
+  const [ripples, setRipples] = useState({});
+  const [floats, setFloats] = useState({});
+  const [progress, setProgress] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`athkar-progress-${deckId}`) || '{}'); } catch { return {}; }
+  });
+
+  const completedCount = deck.cards.filter(c => progress[c.id]).length;
+  const allDone = completedCount === deck.cards.length;
+
+  const handleTap = useCallback((card) => {
+    if (flipped[card.id]) return;
+    const cur = counts[card.id] || 0;
+    if (cur >= card.count) return;
+    const next = cur + 1;
+    const newCounts = { ...counts, [card.id]: next };
+    setCounts(newCounts);
+    localStorage.setItem(`athkar-counts-${deckId}`, JSON.stringify(newCounts));
+
+    // Float
+    const fid = Date.now() + Math.random();
+    setFloats(f => ({ ...f, [card.id]: [...(f[card.id] || []), fid] }));
+    setTimeout(() => setFloats(f => ({ ...f, [card.id]: (f[card.id] || []).filter(x => x !== fid) })), 900);
+
+    // Ripple
+    setRipples(r => ({ ...r, [card.id]: Date.now() }));
+    setTimeout(() => setRipples(r => ({ ...r, [card.id]: null })), 400);
+
+    if (next >= card.count) {
+      const np = { ...progress, [card.id]: true };
+      setProgress(np);
+      localStorage.setItem(`athkar-progress-${deckId}`, JSON.stringify(np));
+    }
+  }, [counts, flipped, progress, deckId]);
+
+  const handleComplete = () => {
+    localStorage.removeItem(`athkar-counts-${deckId}`);
+    onComplete(deckId);
+  };
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', maxWidth: 480, margin: '0 auto' }}>
+
+      {/* Top bar */}
+      <div style={{ padding: '48px 20px 16px', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+        <button onClick={onBack} style={{
+          background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)',
+          width: 40, height: 40, borderRadius: 8, cursor: 'pointer', fontSize: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+        }}>←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: deck.accent, fontFamily: "'Readex Pro', sans-serif" }}>{deck.subtitle}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', direction: 'ltr', marginTop: 3 }}>
+            {completedCount} / {deck.cards.length} complete
+          </div>
+        </div>
+        <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{
+            height: '100%', background: deck.accent, borderRadius: 2,
+            width: `${(completedCount / deck.cards.length) * 100}%`,
+            transition: 'width 0.4s ease'
+          }} />
+        </div>
+      </div>
+
+      {/* Scrollable card list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 20px 40px' }}>
+        {deck.cards.map((card, i) => {
+          const count = counts[card.id] || 0;
+          const done = count >= card.count;
+          const isFlipped = flipped[card.id] || false;
+          const ripple = ripples[card.id];
+          const cardFloats = floats[card.id] || [];
+
+          return (
+            <div key={card.id} style={{ marginBottom: 20, animation: `slide-in-up 0.35s ${i * 50}ms ease both` }}>
+              {/* Card flip container */}
+              <div className="card-scene" style={{ width: '100%', height: 'auto', minHeight: 240 }}>
+                <div className={`card-inner${isFlipped ? ' flipped' : ''}`} style={{ width: '100%', minHeight: 240 }}>
+
+                  {/* FRONT */}
+                  <div className="card-face" style={{
+                    background: done ? `linear-gradient(135deg, ${deck.dim || 'var(--surface)'}, var(--surface))` : 'var(--surface)',
+                    border: `1px solid ${done ? deck.accent + '70' : 'var(--border)'}`,
+                    borderRadius: 14, padding: '20px 18px 16px',
+                    display: 'flex', flexDirection: 'column', gap: 12,
+                    position: 'relative', overflow: 'hidden',
+                    boxShadow: done ? `0 0 24px ${deck.accent}18` : 'none',
+                    transition: 'border-color 0.3s, box-shadow 0.3s',
+                  }}>
+                    {/* Corner accent */}
+                    <div style={{ position: 'absolute', top: 0, right: 0, width: 36, height: 36,
+                      background: `linear-gradient(225deg, ${deck.accent}20, transparent)`,
+                      borderRadius: '0 14px 0 0', pointerEvents: 'none' }} />
+
+                    {/* Card header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ fontSize: 10, color: deck.accent, fontFamily: 'IBM Plex Mono', letterSpacing: 2, opacity: 0.8 }}>
+                        {String(i + 1).padStart(2, '0')} · {card.title}
+                      </div>
+                      <button onClick={() => setFlipped(f => ({ ...f, [card.id]: !f[card.id] }))} style={{
+                        background: 'none', border: `1px solid var(--border)`, color: 'var(--text-dim)',
+                        padding: '3px 10px', borderRadius: 6, cursor: 'pointer',
+                        fontSize: 10, fontFamily: 'IBM Plex Mono', letterSpacing: 0.5, transition: 'all 0.2s'
+                      }}>◉ Source</button>
+                    </div>
+
+                    {/* Arabic text */}
+                    <div style={{ fontSize: 20, lineHeight: 1.9, textAlign: 'center', direction: 'rtl', padding: '8px 0' }}>
+                      {card.arabic}
+                    </div>
+
+                    {/* Translation */}
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.6,
+                      textAlign: 'center', direction: 'ltr', fontStyle: 'italic' }}>
+                      {card.translation.length > 130 ? card.translation.slice(0, 130) + '…' : card.translation}
+                    </div>
+
+                    {/* Counter row */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 4, position: 'relative' }}>
+                      {/* Float particles */}
+                      {cardFloats.map(fid => (
+                        <div key={fid} style={{
+                          position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)',
+                          fontSize: 14, color: deck.accent, pointerEvents: 'none',
+                          animation: 'float-up 0.9s ease forwards'
+                        }}>+1</div>
+                      ))}
+
+                      {done ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ fontSize: 13, color: deck.accent, fontFamily: 'IBM Plex Mono', direction: 'ltr' }}>
+                            {card.count} / {card.count}
+                          </div>
+                          <div style={{ fontSize: 12, color: deck.accent, background: `${deck.accent}18`,
+                            border: `1px solid ${deck.accent}50`, padding: '4px 12px', borderRadius: 20,
+                            fontFamily: 'IBM Plex Mono', letterSpacing: 1 }}>
+                            ✓ done
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 13, color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', direction: 'ltr', minWidth: 48, textAlign: 'center' }}>
+                            {count} / {card.count}
+                          </div>
+                          <button onClick={() => handleTap(card)} style={{
+                            width: 52, height: 52, borderRadius: '50%',
+                            background: `${deck.accent}18`,
+                            border: `2px solid ${deck.accent}${ripple ? 'ff' : '50'}`,
+                            color: deck.accent, fontSize: 20, cursor: 'pointer',
+                            position: 'relative', overflow: 'visible',
+                            transition: 'border-color 0.1s, transform 0.1s',
+                            transform: ripple ? 'scale(0.91)' : 'scale(1)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            ✦
+                            {ripple && <div style={{
+                              position: 'absolute', inset: -6,
+                              border: `2px solid ${deck.accent}`,
+                              borderRadius: '50%', animation: 'pulse-ring 0.4s ease forwards',
+                              pointerEvents: 'none'
+                            }} />}
+                          </button>
+                          {/* Mini progress bar */}
+                          <div style={{ flex: 1, maxWidth: 60, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: deck.accent, borderRadius: 2,
+                              width: `${(count / card.count) * 100}%`, transition: 'width 0.2s' }} />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* BACK */}
+                  <div className="card-face card-back" style={{
+                    background: 'var(--surface2)',
+                    border: `1px solid ${deck.accent}40`,
+                    borderRadius: 14, padding: '20px 18px',
+                    minHeight: 240,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, color: deck.accent, fontFamily: 'IBM Plex Mono', letterSpacing: 2, opacity: 0.8 }}>
+                        SOURCE & BENEFIT
+                      </div>
+                      <button onClick={() => setFlipped(f => ({ ...f, [card.id]: false }))} style={{
+                        background: 'none', border: `1px solid ${deck.accent}40`, color: deck.accent,
+                        padding: '3px 10px', borderRadius: 6, cursor: 'pointer',
+                        fontSize: 10, fontFamily: 'IBM Plex Mono', letterSpacing: 0.5
+                      }}>◎ Dhikr</button>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono',
+                      direction: 'ltr', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: deck.accent }}>◆</span>{card.source}
+                    </div>
+                    <div style={{ fontSize: 14, lineHeight: 1.85, color: 'var(--text)' }}>{card.benefit}</div>
+                    {card.count > 1 && (
+                      <div style={{ marginTop: 14, padding: '8px 12px',
+                        background: `${deck.accent}12`, border: `1px solid ${deck.accent}30`,
+                        borderRadius: 8, fontSize: 11, color: deck.accent, direction: 'ltr', fontFamily: 'IBM Plex Mono' }}>
+                        ✦ Recite {card.count}×
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Complete button */}
+        {allDone && (
+          <button onClick={handleComplete} style={{
+            width: '100%', padding: '16px', borderRadius: 12,
+            background: `${deck.accent}22`, border: `1px solid ${deck.accent}70`,
+            color: deck.accent, fontSize: 16, cursor: 'pointer',
+            fontFamily: "'Readex Pro', sans-serif", fontWeight: 600,
+            animation: 'slide-in-up 0.4s ease',
+            marginTop: 8,
+          }}>
+            ✦ All Adhkar Complete
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const smallBtnStyle = {
+  background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)',
+  padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+  fontSize: 12, fontFamily: 'IBM Plex Mono', letterSpacing: 0.5,
+  transition: 'all 0.2s'
+};
+
+// ─── Complete Screen ──────────────────────────────────────────────────────────
+function CompleteScreen({ deckId, onHome, onRestart }) {
+  const deck = window.DECKS.find(d => d.id === deckId);
+  const [stars] = useState(() =>
+    Array.from({ length: 12 }, (_, i) => ({
+      x: 20 + Math.random() * 60,
+      y: 10 + Math.random() * 60,
+      size: 1 + Math.random() * 3,
+      delay: i * 80,
+    }))
+  );
+
+  return (
+    <div style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '40px 32px', maxWidth: 400, margin: '0 auto',
+      textAlign: 'center', position: 'relative'
+    }}>
+      {/* Scattered pixel stars */}
+      {stars.map((s, i) => (
+        <div key={i} style={{
+          position: 'absolute',
+          left: `${s.x}%`, top: `${s.y}%`,
+          width: s.size, height: s.size,
+          background: deck.accent,
+          animation: `shimmer ${1.5 + Math.random()}s ${s.delay}ms ease-in-out infinite`,
+          borderRadius: s.size > 2 ? 1 : 0,
+        }} />
+      ))}
+
+      <div style={{
+        fontSize: 64, marginBottom: 24,
+        animation: 'complete-burst 0.6s ease both'
+      }}>
+        ✦
+      </div>
+
+      <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 8, color: deck.accent, animation: 'slide-in-up 0.4s 0.1s ease both', opacity: 0, fontFamily: "'Readex Pro', sans-serif" }}>
+        Well Done!
+      </div>
+      <div style={{ fontSize: 19, marginBottom: 8, animation: 'slide-in-up 0.4s 0.2s ease both', opacity: 0, fontFamily: "'Readex Pro', sans-serif" }}>
+        {deck.subtitle}
+      </div>
+      <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 40, lineHeight: 1.7, animation: 'slide-in-up 0.4s 0.3s ease both', opacity: 0 }}>
+        Your adhkar are complete · Barak Allahu feek
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', animation: 'slide-in-up 0.4s 0.4s ease both', opacity: 0 }}>
+        <button onClick={onHome} style={{
+          padding: '14px', borderRadius: 10,
+          background: `${deck.accent}22`, border: `1px solid ${deck.accent}60`,
+          color: deck.accent, fontSize: 16, cursor: 'pointer', fontFamily: 'Amiri', fontWeight: 700,
+        }}>
+          Back to Home
+        </button>
+        <button onClick={onRestart} style={{
+          padding: '12px', borderRadius: 10,
+          background: 'none', border: '1px solid var(--border)',
+          color: 'var(--text-dim)', fontSize: 14, cursor: 'pointer', fontFamily: 'Amiri',
+        }}>
+          Restart Deck
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Settings Screen ──────────────────────────────────────────────────────────
+function SettingsScreen({ onBack }) {
+  const [settings, setSettings] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('athkar-settings') || '{}'); } catch { return {}; }
+  });
+
+  const save = (k, v) => {
+    const next = { ...settings, [k]: v };
+    setSettings(next);
+    localStorage.setItem('athkar-settings', JSON.stringify(next));
+  };
+
+  const clearProgress = () => {
+    window.DECKS.forEach(d => localStorage.removeItem(`athkar-progress-${d.id}`));
+    localStorage.removeItem('athkar-session-sabah');
+    localStorage.removeItem('athkar-session-masaa');
+    localStorage.removeItem('athkar-session-salah');
+    localStorage.removeItem('athkar-session-nawm');
+  };
+
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', maxWidth: 480, margin: '0 auto', padding: '0 20px' }}>
+      <div style={{ padding: '48px 0 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+        <button onClick={onBack} style={{
+          background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)',
+          width: 40, height: 40, borderRadius: 8, cursor: 'pointer', fontSize: 16,
+          direction: 'ltr', display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>←</button>
+        <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Readex Pro', sans-serif" }}>Settings</div>
+      </div>
+
+      <section style={{ marginBottom: 32 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono',
+          letterSpacing: 2, marginBottom: 16 }}>PRAYER TIMES</div>
+
+        {[
+          { key: 'fajr', label: 'Fajr',  default: 5,  subtitle: 'Shows morning adhkar after this time' },
+          { key: 'asr',  label: 'Asr',   default: 15, subtitle: 'Shows evening adhkar after this time' },
+          { key: 'isha', label: 'Isha',  default: 21, subtitle: 'Shows sleep adhkar after this time' },
+        ].map(item => (
+          <div key={item.key} style={{
+            padding: '16px 20px', marginBottom: 10,
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Readex Pro', sans-serif" }}>{item.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{item.subtitle}</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, direction: 'ltr' }}>
+              <button onClick={() => save(item.key, Math.max(0, (parseInt(settings[item.key] ?? item.default)) - 1))}
+                style={{ ...smallBtnStyle, width: 32, height: 32, padding: 0, display:'flex',alignItems:'center',justifyContent:'center' }}>−</button>
+              <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 15, minWidth: 24, textAlign: 'center' }}>
+                {String(settings[item.key] ?? item.default).padStart(2,'0')}:00
+              </span>
+              <button onClick={() => save(item.key, Math.min(23, (parseInt(settings[item.key] ?? item.default)) + 1))}
+                style={{ ...smallBtnStyle, width: 32, height: 32, padding: 0, display:'flex',alignItems:'center',justifyContent:'center' }}>+</button>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono',
+          letterSpacing: 2, marginBottom: 16 }}>DATA</div>
+        <button onClick={clearProgress} style={{
+          width: '100%', padding: '14px', borderRadius: 10,
+          background: 'none', border: '1px solid #ff4444aa',
+          color: '#ff7777', fontSize: 14, cursor: 'pointer', fontFamily: 'Amiri'
+        }}>
+          Reset All Progress
+        </button>
+      </section>
+
+      <section style={{ padding: '20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 40 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.8, textAlign: 'center' }}>
+          Athkar — Daily Remembrance App<br/>
+          <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 10 }}>v1.0 · 1446 AH</span>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ─── Tweaks ───────────────────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentGold": true,
+  "arabicSize": 22,
+  "showTranslation": true,
+  "themeColor": "teal"
+}/*EDITMODE-END*/;
+
+function TweaksPanel({ visible, tweaks, onChange }) {
+  if (!visible) return null;
+  return (
+    <div style={{
+      position: 'fixed', bottom: 24, left: 24, zIndex: 999,
+      background: 'var(--surface2)', border: '1px solid var(--border)',
+      borderRadius: 12, padding: '16px 18px', minWidth: 220,
+      boxShadow: '0 8px 32px #00000088',
+      animation: 'slide-in-up 0.3s ease'
+    }}>
+      <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono',
+        letterSpacing: 2, marginBottom: 14 }}>TWEAKS</div>
+
+      <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: 12, fontSize: 13, cursor: 'pointer' }}>
+        <span>حجم الخط العربي</span>
+        <input type="range" min="16" max="30" value={tweaks.arabicSize}
+          onChange={e => onChange('arabicSize', parseInt(e.target.value))}
+          style={{ width: 80 }} />
+      </label>
+
+      <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: 12, fontSize: 13, cursor: 'pointer' }}>
+        <span>إظهار الترجمة</span>
+        <input type="checkbox" checked={tweaks.showTranslation}
+          onChange={e => onChange('showTranslation', e.target.checked)} />
+      </label>
+
+      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>لون البروز</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[
+          { key: 'gold', color: '#d4a853' },
+          { key: 'violet', color: '#a98fd4' },
+          { key: 'teal', color: '#7ac4a0' },
+          { key: 'blue', color: '#7a9fd4' },
+        ].map(({ key, color }) => (
+          <div key={key} onClick={() => onChange('themeColor', key)}
+            style={{
+              width: 24, height: 24, borderRadius: 4, background: color, cursor: 'pointer',
+              border: tweaks.themeColor === key ? '2px solid white' : '2px solid transparent'
+            }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState('home');
+  const [activeDeck, setActiveDeck] = useState(null);
+  const [tweaksVisible, setTweaksVisible] = useState(false);
+  const [tweaks, setTweaks] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('athkar-tweaks') || '{}');
+      return { ...TWEAK_DEFAULTS, ...saved };
+    } catch { return TWEAK_DEFAULTS; }
+  });
+
+  // Tweaks messaging
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setTweaksVisible(true);
+      if (e.data?.type === '__deactivate_edit_mode') setTweaksVisible(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const handleTweakChange = (key, val) => {
+    const next = { ...tweaks, [key]: val };
+    setTweaks(next);
+    localStorage.setItem('athkar-tweaks', JSON.stringify(next));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: next }, '*');
+  };
+
+  // Apply tweaks as CSS vars
+  useEffect(() => {
+    document.documentElement.style.setProperty('--arabic-size', tweaks.arabicSize + 'px');
+  }, [tweaks.arabicSize]);
+
+  return (
+    <div style={{ height: '100%', position: 'relative' }}>
+      <Starfield />
+
+      {screen === 'home' && (
+        <HomeScreen
+          key="home"
+          onSelect={id => { setActiveDeck(id); setScreen('deck'); }}
+          onSettings={() => setScreen('settings')}
+        />
+      )}
+      {screen === 'deck' && activeDeck && (
+        <DeckScreen
+          key={`deck-${activeDeck}`}
+          deckId={activeDeck}
+          onBack={() => setScreen('home')}
+          onComplete={(id) => { setActiveDeck(id); setScreen('complete'); }}
+          tweaks={tweaks}
+        />
+      )}
+      {screen === 'complete' && (
+        <CompleteScreen
+          key="complete"
+          deckId={activeDeck}
+          onHome={() => setScreen('home')}
+          onRestart={() => {
+            localStorage.removeItem(`athkar-progress-${activeDeck}`);
+            localStorage.removeItem(`athkar-session-${activeDeck}`);
+            setScreen('deck');
+          }}
+        />
+      )}
+      {screen === 'settings' && (
+        <SettingsScreen key="settings" onBack={() => setScreen('home')} />
+      )}
+
+      <TweaksPanel visible={tweaksVisible} tweaks={tweaks} onChange={handleTweakChange} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+<!-- PWA Service Worker Registration -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
+</body>
+</html>
